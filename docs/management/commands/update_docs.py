@@ -102,29 +102,9 @@ class Command(BaseCommand):
         # Update the release from SCM.
         #
         # Make a git checkout/update into the destination directory.
-        git_changed = self.update_git(release.scm_url, checkout_dir, changed_dir='docs/')
-        if git_changed:
-            self.release_docs_changed[release.version] = True
-        version_changed = git_changed or self.release_docs_changed.get(release.version)
-        if not force and not version_changed:
-            if self.verbosity >= 1:
-                self.stdout.write("No docs changes for %s, skipping docs building." % release)
-            return
-
         self.update_index_required = self.update_index
 
         source_dir = checkout_dir.joinpath('docs')
-
-        if release.lang != 'en':
-            scm_url = release.scm_url.replace('django.git', 'django-docs-translations.git')
-            trans_dir = checkout_dir.joinpath('django-docs-translation')
-            if not trans_dir.exists():
-                trans_dir.mkdir()
-            self.update_git(scm_url, trans_dir)
-            if not source_dir.joinpath('locale').exists():
-                source_dir.joinpath('locale').symlink_to(trans_dir.joinpath('translations'))
-            extra_kwargs = {'stdout': subprocess.DEVNULL} if self.verbosity == 0 else {}
-            subprocess.check_call('cd %s && make translations' % trans_dir, shell=True, **extra_kwargs)
 
         if release.is_default:
             # Build the pot files (later retrieved by Transifex)
@@ -138,9 +118,6 @@ class Command(BaseCommand):
         for builder in builders:
             # Wipe and re-create the build directory. See #18930.
             build_dir = parent_build_dir.joinpath('_build', builder)
-            if build_dir.exists():
-                shutil.rmtree(str(build_dir))
-            build_dir.mkdir(parents=True)
 
             if self.verbosity >= 2:
                 self.stdout.write("  building %s (%s -> %s)" % (builder, source_dir, build_dir))
@@ -152,7 +129,6 @@ class Command(BaseCommand):
                     'sphinx-build',
                     '-b', builder,
                     '-D', 'language=%s' % to_locale(release.lang),
-                    '-Q' if self.verbosity == 0 else '-q',
                     str(source_dir),        # Source file directory
                     str(build_dir),         # Destination directory
                 ], stderr=sys.stdout)
